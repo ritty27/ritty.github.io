@@ -5,7 +5,66 @@
         <link>https://ritty27.github.io/</link>
         <description>Recent content on ritty.blog</description>
         <generator>Hugo -- gohugo.io</generator>
-        <language>ko-kr</language><atom:link href="https://ritty27.github.io/index.xml" rel="self" type="application/rss+xml" /><item>
+        <language>ko-kr</language>
+        <lastBuildDate>Fri, 28 Jul 2023 18:00:02 +0900</lastBuildDate><atom:link href="https://ritty27.github.io/index.xml" rel="self" type="application/rss+xml" /><item>
+        <title>Elasticsearch Alias 교체 최적화 하기</title>
+        <link>https://ritty27.github.io/p/elasticsearch-alias-%EA%B5%90%EC%B2%B4-%EC%B5%9C%EC%A0%81%ED%99%94-%ED%95%98%EA%B8%B0/</link>
+        <pubDate>Fri, 28 Jul 2023 18:00:02 +0900</pubDate>
+        
+        <guid>https://ritty27.github.io/p/elasticsearch-alias-%EA%B5%90%EC%B2%B4-%EC%B5%9C%EC%A0%81%ED%99%94-%ED%95%98%EA%B8%B0/</guid>
+        <description>&lt;h2 id=&#34;elasticsearch-alias-교체-원인&#34;&gt;Elasticsearch Alias 교체 원인&lt;/h2&gt;
+&lt;p&gt;ES를 사용하다 보면 데이터 정합성을 위해 새로운 인덱스를 만들어 전체 색인을 진행하여 Alias 를 교체해 줘야 할 때가 있다.&lt;/p&gt;
+&lt;p&gt;예를 들어&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;Real Time Indexing 이 실패할 수 있기 때문에 최소한의 Sync 보장&lt;/li&gt;
+&lt;li&gt;index mapping/setting 변경 반영&lt;/li&gt;
+&lt;li&gt;dictionary, synonyms 변경 반영 (Percolator 사용 으로 인해 updatable 적용이 불가능 할 때)&lt;/li&gt;
+&lt;li&gt;등등&lt;/li&gt;
+&lt;/ul&gt;
+&lt;h2 id=&#34;alias-교체-flow&#34;&gt;Alias 교체 Flow&lt;/h2&gt;
+&lt;h3 id=&#34;기본-flow&#34;&gt;기본 Flow&lt;/h3&gt;
+&lt;ol&gt;
+&lt;li&gt;신규 Index 생성&lt;/li&gt;
+&lt;li&gt;신규 Index에 Document 전체 색인 진행&lt;/li&gt;
+&lt;li&gt;Alias 신규 Index 로 교체&lt;/li&gt;
+&lt;/ol&gt;
+&lt;h3 id=&#34;최적화-과정&#34;&gt;최적화 과정&lt;/h3&gt;
+&lt;ul&gt;
+&lt;li&gt;refresh_interval : -1&lt;/li&gt;
+&lt;li&gt;number_of_replicas : 0&lt;/li&gt;
+&lt;li&gt;신규 Index Green Status 대기&lt;/li&gt;
+&lt;/ul&gt;
+&lt;h3 id=&#34;최종-flow&#34;&gt;최종 Flow&lt;/h3&gt;
+&lt;ol&gt;
+&lt;li&gt;신규 Index 생성 (mapping, setting 반영 된)&lt;/li&gt;
+&lt;li&gt;신규 Index의 refresh_interval, number_of_replicase 설정을 따로 저장&lt;/li&gt;
+&lt;li&gt;refresh_interval : -1, number_of_replicas : 0 로 설정&lt;/li&gt;
+&lt;li&gt;신규 Index에 Document 전체 색인 진행&lt;/li&gt;
+&lt;li&gt;2번에서 저장해놓은 기존 세팅으로 복구&lt;/li&gt;
+&lt;li&gt;신규 Index Status가 Green이 될 때까지 기다린 이후 Alais 교체&lt;/li&gt;
+&lt;li&gt;(Optional) 기존 Index 제거&lt;/li&gt;
+&lt;/ol&gt;
+&lt;h2 id=&#34;최적화로-인한-이점&#34;&gt;최적화로 인한 이점&lt;/h2&gt;
+&lt;h3 id=&#34;refresh_interval&#34;&gt;refresh_interval&lt;/h3&gt;
+&lt;p&gt;refresh_interval 설정은 ES 내부에서 주기적으로 refresh 하는 주기를 결정 하는 설정이다.
+refresh를 하게 되면 Lucene Segment가 생성되고 검색이 가능해진다.
+기본값으로 1s를 갖고 있는데, 이로 인해 ES가 준 실시간 검색 엔진이라고 불릴 수 있는 것이다.&lt;/p&gt;
+&lt;p&gt;대규모 Document를 indexing 할 때에는 계속 refresh가 일어나면 인덱싱 속도에 영향을 주게 된다.
+refresh_interval 설정은 dynamic 설정이기 때문에 bulk indexing이 완료된 이후 원하는 설정 값으로 설정 시 바로 반영된다.
+따라서 2번 과정에서 index의 refresh_interval 세팅을 저장하고 bulk indexing 이 후 5번에서 복원하면 된다.&lt;/p&gt;
+&lt;h3 id=&#34;number_of_replicas&#34;&gt;number_of_replicas&lt;/h3&gt;
+&lt;p&gt;number_of_replicas는 primary shard의 복제본을 몇개 만들지 결정 하는 설정이다.
+마찬가지로 dynamic 설정이기 때문에 bulk indexing 이후 설정을 복원하면 된다.&lt;/p&gt;
+&lt;h2 id=&#34;6번---index-status-green-대기-하는-이유&#34;&gt;6번 - Index Status Green 대기 하는 이유&lt;/h2&gt;
+&lt;p&gt;Bulk Indexing 이후 number_of_replicase 설정을 복원하면 ES 노드들에서 replica shard 들이 생성되고, 색인된다.
+primary shard를 색인하는데 문제가 없었다면, replica shard가 완료될 때 까지 index는 Yellow 상태가 된다.&lt;/p&gt;
+&lt;p&gt;Yellow Status는 primary shard가 문제가 생길 경우 데이터 유실이 발생 할 수 있기 때문에 Green Status 까지 대기 한 이후
+Alias를 교체해 주는 것이다.&lt;/p&gt;
+&lt;p&gt;참조 : &lt;a class=&#34;link&#34; href=&#34;https://www.elastic.co/guide/en/elasticsearch/reference/current/tune-for-indexing-speed.html&#34;  target=&#34;_blank&#34; rel=&#34;noopener&#34;
+    &gt;https://www.elastic.co/guide/en/elasticsearch/reference/current/tune-for-indexing-speed.html&lt;/a&gt;&lt;/p&gt;
+</description>
+        </item>
+        <item>
         <title>Archives</title>
         <link>https://ritty27.github.io/archives/</link>
         <pubDate>Tue, 28 May 2019 00:00:00 +0000</pubDate>

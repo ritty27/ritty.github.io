@@ -1,0 +1,530 @@
+<!DOCTYPE html>
+<html lang="ko-kr" dir="ltr">
+    <head><meta charset='utf-8'>
+<meta name='viewport' content='width=device-width, initial-scale=1'><meta name='description' content='Elasticsearch Alias 교체 원인 ES를 사용하다 보면 데이터 정합성을 위해 새로운 인덱스를 만들어 전체 색인을 진행하여 Alias 를 교체해 줘야 할 때가 있다.
+예를 들어
+Real Time Indexing 이 실패할 수 있기 때문에 최소한의 Sync 보장 index mapping/setting 변경 반영 dictionary, synonyms 변경 반영 (Percolator 사용 으로 인해 updatable 적용이 불가능 할 때) 등등 Alias 교체 Flow 기본 Flow 신규 Index 생성 신규 Index에 Document 전체 색인 진행 Alias 신규 Index 로 교체 최적화 과정 refresh_interval : -1 number_of_replicas : 0 신규 Index Green Status 대기 최종 Flow 신규 Index 생성 (mapping, setting 반영 된) 신규 Index의 refresh_interval, number_of_replicase 설정을 따로 저장 refresh_interval : -1, number_of_replicas : 0 로 설정 신규 Index에 Document 전체 색인 진행 2번에서 저장해놓은 기존 세팅으로 복구 신규 Index Status가 Green이 될 때까지 기다린 이후 Alais 교체 (Optional) 기존 Index 제거 최적화로 인한 이점 refresh_interval refresh_interval 설정은 ES 내부에서 주기적으로 refresh 하는 주기를 결정 하는 설정이다.'>
+<title>Elasticsearch Alias 교체 최적화 하기</title>
+
+<link rel='canonical' href='https://ritty27.github.io/p/elasticsearch-alias-%EA%B5%90%EC%B2%B4-%EC%B5%9C%EC%A0%81%ED%99%94-%ED%95%98%EA%B8%B0/'>
+
+<link rel="stylesheet" href="/scss/style.min.ff300df33b80e2ac49809c825614392ed1c7b27591d65d3c4043602cd162e25f.css"><meta property='og:title' content='Elasticsearch Alias 교체 최적화 하기'>
+<meta property='og:description' content='Elasticsearch Alias 교체 원인 ES를 사용하다 보면 데이터 정합성을 위해 새로운 인덱스를 만들어 전체 색인을 진행하여 Alias 를 교체해 줘야 할 때가 있다.
+예를 들어
+Real Time Indexing 이 실패할 수 있기 때문에 최소한의 Sync 보장 index mapping/setting 변경 반영 dictionary, synonyms 변경 반영 (Percolator 사용 으로 인해 updatable 적용이 불가능 할 때) 등등 Alias 교체 Flow 기본 Flow 신규 Index 생성 신규 Index에 Document 전체 색인 진행 Alias 신규 Index 로 교체 최적화 과정 refresh_interval : -1 number_of_replicas : 0 신규 Index Green Status 대기 최종 Flow 신규 Index 생성 (mapping, setting 반영 된) 신규 Index의 refresh_interval, number_of_replicase 설정을 따로 저장 refresh_interval : -1, number_of_replicas : 0 로 설정 신규 Index에 Document 전체 색인 진행 2번에서 저장해놓은 기존 세팅으로 복구 신규 Index Status가 Green이 될 때까지 기다린 이후 Alais 교체 (Optional) 기존 Index 제거 최적화로 인한 이점 refresh_interval refresh_interval 설정은 ES 내부에서 주기적으로 refresh 하는 주기를 결정 하는 설정이다.'>
+<meta property='og:url' content='https://ritty27.github.io/p/elasticsearch-alias-%EA%B5%90%EC%B2%B4-%EC%B5%9C%EC%A0%81%ED%99%94-%ED%95%98%EA%B8%B0/'>
+<meta property='og:site_name' content='ritty.blog'>
+<meta property='og:type' content='article'><meta property='article:section' content='Post' /><meta property='article:published_time' content='2023-07-28T18:00:02&#43;09:00'/><meta property='article:modified_time' content='2023-07-28T18:00:02&#43;09:00'/>
+<meta name="twitter:title" content="Elasticsearch Alias 교체 최적화 하기">
+<meta name="twitter:description" content="Elasticsearch Alias 교체 원인 ES를 사용하다 보면 데이터 정합성을 위해 새로운 인덱스를 만들어 전체 색인을 진행하여 Alias 를 교체해 줘야 할 때가 있다.
+예를 들어
+Real Time Indexing 이 실패할 수 있기 때문에 최소한의 Sync 보장 index mapping/setting 변경 반영 dictionary, synonyms 변경 반영 (Percolator 사용 으로 인해 updatable 적용이 불가능 할 때) 등등 Alias 교체 Flow 기본 Flow 신규 Index 생성 신규 Index에 Document 전체 색인 진행 Alias 신규 Index 로 교체 최적화 과정 refresh_interval : -1 number_of_replicas : 0 신규 Index Green Status 대기 최종 Flow 신규 Index 생성 (mapping, setting 반영 된) 신규 Index의 refresh_interval, number_of_replicase 설정을 따로 저장 refresh_interval : -1, number_of_replicas : 0 로 설정 신규 Index에 Document 전체 색인 진행 2번에서 저장해놓은 기존 세팅으로 복구 신규 Index Status가 Green이 될 때까지 기다린 이후 Alais 교체 (Optional) 기존 Index 제거 최적화로 인한 이점 refresh_interval refresh_interval 설정은 ES 내부에서 주기적으로 refresh 하는 주기를 결정 하는 설정이다.">
+    </head>
+    <body class="
+    article-page
+    ">
+    <script>
+        (function() {
+            const colorSchemeKey = 'StackColorScheme';
+            if(!localStorage.getItem(colorSchemeKey)){
+                localStorage.setItem(colorSchemeKey, "auto");
+            }
+        })();
+    </script><script>
+    (function() {
+        const colorSchemeKey = 'StackColorScheme';
+        const colorSchemeItem = localStorage.getItem(colorSchemeKey);
+        const supportDarkMode = window.matchMedia('(prefers-color-scheme: dark)').matches === true;
+
+        if (colorSchemeItem == 'dark' || colorSchemeItem === 'auto' && supportDarkMode) {
+            
+
+            document.documentElement.dataset.scheme = 'dark';
+        } else {
+            document.documentElement.dataset.scheme = 'light';
+        }
+    })();
+</script>
+<div class="container main-container flex on-phone--column extended"><aside class="sidebar left-sidebar sticky ">
+    <button class="hamburger hamburger--spin" type="button" id="toggle-menu" aria-label="Toggle Menu">
+        <span class="hamburger-box">
+            <span class="hamburger-inner"></span>
+        </span>
+    </button>
+
+    <header>
+        
+            
+            <figure class="site-avatar">
+                <a href="/">
+                
+                    
+                    
+                    
+                        
+                        <img src="/img/avatar_huda2458f72ce188392d75c5d51cd8e24e_373_300x0_resize_box_3.png" width="300"
+                            height="300" class="site-logo" loading="lazy" alt="Avatar">
+                    
+                
+                </a>
+                
+                    <span class="emoji">🍥</span>
+                
+            </figure>
+            
+        
+        
+        <div class="site-meta">
+            <h1 class="site-name"><a href="/">ritty.blog</a></h1>
+            <h2 class="site-description">기술 블로그</h2>
+        </div>
+    </header><ol class="social-menu">
+            
+                <li>
+                    <a 
+                        href='https://github.com/ritty27'
+                        target="_blank"
+                        title="GitHub"
+                        rel="me"
+                    >
+                        
+                        
+                            <svg xmlns="http://www.w3.org/2000/svg" class="icon icon-tabler icon-tabler-brand-github" width="24" height="24" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round">
+  <path stroke="none" d="M0 0h24v24H0z" fill="none"/>
+  <path d="M9 19c-4.3 1.4 -4.3 -2.5 -6 -3m12 5v-3.5c0 -1 .1 -1.4 -.5 -2c2.8 -.3 5.5 -1.4 5.5 -6a4.6 4.6 0 0 0 -1.3 -3.2a4.2 4.2 0 0 0 -.1 -3.2s-1.1 -.3 -3.5 1.3a12.3 12.3 0 0 0 -6.2 0c-2.4 -1.6 -3.5 -1.3 -3.5 -1.3a4.2 4.2 0 0 0 -.1 3.2a4.6 4.6 0 0 0 -1.3 3.2c0 4.6 2.7 5.7 5.5 6c-.6 .6 -.6 1.2 -.5 2v3.5" />
+</svg>
+
+
+
+                        
+                    </a>
+                </li>
+            
+                <li>
+                    <a 
+                        href='https://www.linkedin.com/in/jisoo-park-908639240'
+                        target="_blank"
+                        title="Linkedin"
+                        rel="me"
+                    >
+                        
+                        
+                            <svg xmlns="http://www.w3.org/2000/svg" class="icon icon-tabler icon-tabler-brand-linkedin" width="44" height="44" viewBox="0 0 24 24" stroke-width="1.5" stroke="#2c3e50" fill="none" stroke-linecap="round" stroke-linejoin="round">
+  <path stroke="none" d="M0 0h24v24H0z" fill="none"/>
+  <path d="M4 4m0 2a2 2 0 0 1 2 -2h12a2 2 0 0 1 2 2v12a2 2 0 0 1 -2 2h-12a2 2 0 0 1 -2 -2z" />
+  <path d="M8 11l0 5" />
+  <path d="M8 8l0 .01" />
+  <path d="M12 16l0 -5" />
+  <path d="M16 16v-3a2 2 0 0 0 -4 0" />
+</svg>
+
+                        
+                    </a>
+                </li>
+            
+        </ol><ol class="menu" id="main-menu">
+        
+        
+        
+        <li >
+            <a href='/archives/' >
+                
+                
+                
+                    <svg xmlns="http://www.w3.org/2000/svg" class="icon icon-tabler icon-tabler-archive" width="24" height="24" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round">
+  <path stroke="none" d="M0 0h24v24H0z"/>
+  <rect x="3" y="4" width="18" height="4" rx="2" />
+  <path d="M5 8v10a2 2 0 0 0 2 2h10a2 2 0 0 0 2 -2v-10" />
+  <line x1="10" y1="12" x2="14" y2="12" />
+</svg>
+
+
+
+                
+                <span>Archives</span>
+            </a>
+        </li>
+        
+
+        <div class="menu-bottom-section">
+            
+            
+                <li id="dark-mode-toggle">
+                    <svg xmlns="http://www.w3.org/2000/svg" class="icon icon-tabler icon-tabler-toggle-left" width="24" height="24" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round">
+  <path stroke="none" d="M0 0h24v24H0z"/>
+  <circle cx="8" cy="12" r="2" />
+  <rect x="2" y="6" width="20" height="12" rx="6" />
+</svg>
+
+
+
+                    <svg xmlns="http://www.w3.org/2000/svg" class="icon icon-tabler icon-tabler-toggle-right" width="24" height="24" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round">
+  <path stroke="none" d="M0 0h24v24H0z"/>
+  <circle cx="16" cy="12" r="2" />
+  <rect x="2" y="6" width="20" height="12" rx="6" />
+</svg>
+
+
+
+                    <span>Dark Mode</span>
+                </li>
+            
+        </div>
+    </ol>
+</aside>
+
+    <aside class="sidebar right-sidebar sticky">
+        
+            
+                
+    <section class="widget archives">
+        <div class="widget-icon">
+            <svg xmlns="http://www.w3.org/2000/svg" class="icon icon-tabler icon-tabler-hash" width="24" height="24" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round">
+  <path stroke="none" d="M0 0h24v24H0z"/>
+  <line x1="5" y1="9" x2="19" y2="9" />
+  <line x1="5" y1="15" x2="19" y2="15" />
+  <line x1="11" y1="4" x2="7" y2="20" />
+  <line x1="17" y1="4" x2="13" y2="20" />
+</svg>
+
+
+
+        </div>
+        <h2 class="widget-title section-title">Table of contents</h2>
+        
+        <div class="widget--toc">
+            <nav id="TableOfContents">
+  <ol>
+    <li><a href="#elasticsearch-alias-교체-원인">Elasticsearch Alias 교체 원인</a></li>
+    <li><a href="#alias-교체-flow">Alias 교체 Flow</a>
+      <ol>
+        <li><a href="#기본-flow">기본 Flow</a></li>
+        <li><a href="#최적화-과정">최적화 과정</a></li>
+        <li><a href="#최종-flow">최종 Flow</a></li>
+      </ol>
+    </li>
+    <li><a href="#최적화로-인한-이점">최적화로 인한 이점</a>
+      <ol>
+        <li><a href="#refresh_interval">refresh_interval</a></li>
+        <li><a href="#number_of_replicas">number_of_replicas</a></li>
+      </ol>
+    </li>
+    <li><a href="#6번---index-status-green-대기-하는-이유">6번 - Index Status Green 대기 하는 이유</a></li>
+  </ol>
+</nav>
+        </div>
+    </section>
+
+            
+        
+    </aside>
+
+
+            <main class="main full-width">
+    <article class="main-article">
+    <header class="article-header">
+
+    <div class="article-details">
+    
+    <header class="article-category">
+        
+            <a href="/categories/elasticsearch/" style="background-color: #2a9d8f; color: #fff;">
+                Elasticsearch
+            </a>
+        
+    </header>
+    
+
+    <div class="article-title-wrapper">
+        <h2 class="article-title">
+            <a href="/p/elasticsearch-alias-%EA%B5%90%EC%B2%B4-%EC%B5%9C%EC%A0%81%ED%99%94-%ED%95%98%EA%B8%B0/">Elasticsearch Alias 교체 최적화 하기</a>
+        </h2>
+    
+        
+    </div>
+
+    
+    
+    
+    
+    <footer class="article-time">
+        
+            <div>
+                <svg xmlns="http://www.w3.org/2000/svg" class="icon icon-tabler icon-tabler-calendar-time" width="56" height="56" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round">
+  <path stroke="none" d="M0 0h24v24H0z"/>
+  <path d="M11.795 21h-6.795a2 2 0 0 1 -2 -2v-12a2 2 0 0 1 2 -2h12a2 2 0 0 1 2 2v4" />
+  <circle cx="18" cy="18" r="4" />
+  <path d="M15 3v4" />
+  <path d="M7 3v4" />
+  <path d="M3 11h16" />
+  <path d="M18 16.496v1.504l1 1" />
+</svg>
+                <time class="article-time--published">Jul 28, 2023</time>
+            </div>
+        
+
+        
+            <div>
+                <svg xmlns="http://www.w3.org/2000/svg" class="icon icon-tabler icon-tabler-clock" width="24" height="24" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round">
+  <path stroke="none" d="M0 0h24v24H0z"/>
+  <circle cx="12" cy="12" r="9" />
+  <polyline points="12 7 12 12 15 15" />
+</svg>
+
+
+
+                <time class="article-time--reading">
+                    2 minute read
+                </time>
+            </div>
+        
+    </footer>
+    
+
+    
+</div>
+
+</header>
+
+    <section class="article-content">
+    
+    
+    <h2 id="elasticsearch-alias-교체-원인">Elasticsearch Alias 교체 원인</h2>
+<p>ES를 사용하다 보면 데이터 정합성을 위해 새로운 인덱스를 만들어 전체 색인을 진행하여 Alias 를 교체해 줘야 할 때가 있다.</p>
+<p>예를 들어</p>
+<ul>
+<li>Real Time Indexing 이 실패할 수 있기 때문에 최소한의 Sync 보장</li>
+<li>index mapping/setting 변경 반영</li>
+<li>dictionary, synonyms 변경 반영 (Percolator 사용 으로 인해 updatable 적용이 불가능 할 때)</li>
+<li>등등</li>
+</ul>
+<h2 id="alias-교체-flow">Alias 교체 Flow</h2>
+<h3 id="기본-flow">기본 Flow</h3>
+<ol>
+<li>신규 Index 생성</li>
+<li>신규 Index에 Document 전체 색인 진행</li>
+<li>Alias 신규 Index 로 교체</li>
+</ol>
+<h3 id="최적화-과정">최적화 과정</h3>
+<ul>
+<li>refresh_interval : -1</li>
+<li>number_of_replicas : 0</li>
+<li>신규 Index Green Status 대기</li>
+</ul>
+<h3 id="최종-flow">최종 Flow</h3>
+<ol>
+<li>신규 Index 생성 (mapping, setting 반영 된)</li>
+<li>신규 Index의 refresh_interval, number_of_replicase 설정을 따로 저장</li>
+<li>refresh_interval : -1, number_of_replicas : 0 로 설정</li>
+<li>신규 Index에 Document 전체 색인 진행</li>
+<li>2번에서 저장해놓은 기존 세팅으로 복구</li>
+<li>신규 Index Status가 Green이 될 때까지 기다린 이후 Alais 교체</li>
+<li>(Optional) 기존 Index 제거</li>
+</ol>
+<h2 id="최적화로-인한-이점">최적화로 인한 이점</h2>
+<h3 id="refresh_interval">refresh_interval</h3>
+<p>refresh_interval 설정은 ES 내부에서 주기적으로 refresh 하는 주기를 결정 하는 설정이다.
+refresh를 하게 되면 Lucene Segment가 생성되고 검색이 가능해진다.
+기본값으로 1s를 갖고 있는데, 이로 인해 ES가 준 실시간 검색 엔진이라고 불릴 수 있는 것이다.</p>
+<p>대규모 Document를 indexing 할 때에는 계속 refresh가 일어나면 인덱싱 속도에 영향을 주게 된다.
+refresh_interval 설정은 dynamic 설정이기 때문에 bulk indexing이 완료된 이후 원하는 설정 값으로 설정 시 바로 반영된다.
+따라서 2번 과정에서 index의 refresh_interval 세팅을 저장하고 bulk indexing 이 후 5번에서 복원하면 된다.</p>
+<h3 id="number_of_replicas">number_of_replicas</h3>
+<p>number_of_replicas는 primary shard의 복제본을 몇개 만들지 결정 하는 설정이다.
+마찬가지로 dynamic 설정이기 때문에 bulk indexing 이후 설정을 복원하면 된다.</p>
+<h2 id="6번---index-status-green-대기-하는-이유">6번 - Index Status Green 대기 하는 이유</h2>
+<p>Bulk Indexing 이후 number_of_replicase 설정을 복원하면 ES 노드들에서 replica shard 들이 생성되고, 색인된다.
+primary shard를 색인하는데 문제가 없었다면, replica shard가 완료될 때 까지 index는 Yellow 상태가 된다.</p>
+<p>Yellow Status는 primary shard가 문제가 생길 경우 데이터 유실이 발생 할 수 있기 때문에 Green Status 까지 대기 한 이후
+Alias를 교체해 주는 것이다.</p>
+<p>참조 : <a class="link" href="https://www.elastic.co/guide/en/elasticsearch/reference/current/tune-for-indexing-speed.html"  target="_blank" rel="noopener"
+    >https://www.elastic.co/guide/en/elasticsearch/reference/current/tune-for-indexing-speed.html</a></p>
+
+</section>
+
+
+    <footer class="article-footer">
+    
+
+    
+    <section class="article-copyright">
+        <svg xmlns="http://www.w3.org/2000/svg" class="icon icon-tabler icon-tabler-copyright" width="24" height="24" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round">
+  <path stroke="none" d="M0 0h24v24H0z"/>
+  <circle cx="12" cy="12" r="9" />
+  <path d="M14.5 9a3.5 4 0 1 0 0 6" />
+</svg>
+
+
+
+        <span>Licensed under CC BY-NC-SA 4.0</span>
+    </section>
+    </footer>
+
+
+    
+</article>
+
+    
+
+    
+
+     
+    
+        
+    <div class="disqus-container">
+    <div id="disqus_thread"></div>
+<script type="application/javascript">
+    window.disqus_config = function () {
+    
+    
+    
+    };
+    (function() {
+        if (["localhost", "127.0.0.1"].indexOf(window.location.hostname) != -1) {
+            document.getElementById('disqus_thread').innerHTML = 'Disqus comments not available by default when the website is previewed locally.';
+            return;
+        }
+        var d = document, s = d.createElement('script'); s.async = true;
+        s.src = '//' + "hugo-theme-stack" + '.disqus.com/embed.js';
+        s.setAttribute('data-timestamp', +new Date());
+        (d.head || d.body).appendChild(s);
+    })();
+</script>
+<noscript>Please enable JavaScript to view the <a href="https://disqus.com/?ref_noscript">comments powered by Disqus.</a></noscript>
+<a href="https://disqus.com" class="dsq-brlink">comments powered by <span class="logo-disqus">Disqus</span></a>
+</div>
+
+<style>
+    .disqus-container {
+        background-color: var(--card-background);
+        border-radius: var(--card-border-radius);
+        box-shadow: var(--shadow-l1);
+        padding: var(--card-padding);
+    }
+</style>
+
+<script>
+    window.addEventListener('onColorSchemeChange', (e) => {
+        if (typeof DISQUS == 'object') {
+            DISQUS.reset({
+                reload: true
+            });
+        }
+    })
+</script>
+
+    
+
+    <footer class="site-footer">
+    <section class="copyright">
+        &copy; 
+        
+        2023 ritty.blog
+    </section>
+    
+    <section class="powerby">
+        Built with <a href="https://gohugo.io/" target="_blank" rel="noopener">Hugo</a> <br />
+        Theme <b><a href="https://github.com/CaiJimmy/hugo-theme-stack" target="_blank" rel="noopener" data-version="3.17.0">Stack</a></b> designed by <a href="https://jimmycai.com" target="_blank" rel="noopener">Jimmy</a>
+    </section>
+</footer>
+
+
+    
+<div class="pswp" tabindex="-1" role="dialog" aria-hidden="true">
+
+    
+    <div class="pswp__bg"></div>
+
+    
+    <div class="pswp__scroll-wrap">
+
+        
+        <div class="pswp__container">
+            <div class="pswp__item"></div>
+            <div class="pswp__item"></div>
+            <div class="pswp__item"></div>
+        </div>
+
+        
+        <div class="pswp__ui pswp__ui--hidden">
+
+            <div class="pswp__top-bar">
+
+                
+
+                <div class="pswp__counter"></div>
+
+                <button class="pswp__button pswp__button--close" title="Close (Esc)"></button>
+
+                <button class="pswp__button pswp__button--share" title="Share"></button>
+
+                <button class="pswp__button pswp__button--fs" title="Toggle fullscreen"></button>
+
+                <button class="pswp__button pswp__button--zoom" title="Zoom in/out"></button>
+
+                
+                
+                <div class="pswp__preloader">
+                    <div class="pswp__preloader__icn">
+                        <div class="pswp__preloader__cut">
+                            <div class="pswp__preloader__donut"></div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="pswp__share-modal pswp__share-modal--hidden pswp__single-tap">
+                <div class="pswp__share-tooltip"></div>
+            </div>
+
+            <button class="pswp__button pswp__button--arrow--left" title="Previous (arrow left)">
+            </button>
+
+            <button class="pswp__button pswp__button--arrow--right" title="Next (arrow right)">
+            </button>
+
+            <div class="pswp__caption">
+                <div class="pswp__caption__center"></div>
+            </div>
+
+        </div>
+
+    </div>
+
+</div><script 
+                src="https://cdn.jsdelivr.net/npm/photoswipe@4.1.3/dist/photoswipe.min.js"integrity="sha256-ePwmChbbvXbsO02lbM3HoHbSHTHFAeChekF1xKJdleo="crossorigin="anonymous"
+                defer
+                >
+            </script><script 
+                src="https://cdn.jsdelivr.net/npm/photoswipe@4.1.3/dist/photoswipe-ui-default.min.js"integrity="sha256-UKkzOn/w1mBxRmLLGrSeyB4e1xbrp4xylgAWb3M42pU="crossorigin="anonymous"
+                defer
+                >
+            </script><link 
+                rel="stylesheet" 
+                href="https://cdn.jsdelivr.net/npm/photoswipe@4.1.3/dist/default-skin/default-skin.min.css"crossorigin="anonymous"
+            ><link 
+                rel="stylesheet" 
+                href="https://cdn.jsdelivr.net/npm/photoswipe@4.1.3/dist/photoswipe.min.css"crossorigin="anonymous"
+            >
+
+            </main>
+        </div>
+        <script 
+                src="https://cdn.jsdelivr.net/npm/node-vibrant@3.1.6/dist/vibrant.min.js"integrity="sha256-awcR2jno4kI5X0zL8ex0vi2z&#43;KMkF24hUW8WePSA9HM="crossorigin="anonymous"
+                
+                >
+            </script><script type="text/javascript" src="/ts/main.js" defer></script>
+<script>
+    (function () {
+        const customFont = document.createElement('link');
+        customFont.href = "https://fonts.googleapis.com/css2?family=Lato:wght@300;400;700&display=swap";
+
+        customFont.type = "text/css";
+        customFont.rel = "stylesheet";
+
+        document.head.appendChild(customFont);
+    }());
+</script>
+
+    </body>
+</html>

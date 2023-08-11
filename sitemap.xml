@@ -2,14 +2,23 @@
 <urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9"
   xmlns:xhtml="http://www.w3.org/1999/xhtml">
   <url>
-    <loc>https://ritty27.github.io/archives/</loc>
-    <lastmod>2019-05-28T00:00:00+00:00</lastmod>
-  </url><url>
     <loc>https://ritty27.github.io/categories/</loc>
+    <lastmod>2023-07-28T18:00:02+09:00</lastmod>
   </url><url>
     <loc>https://ritty27.github.io/categories/elasticsearch/</loc>
+    <lastmod>2023-07-28T18:00:02+09:00</lastmod>
+  </url><url>
+    <loc>https://ritty27.github.io/p/elasticsearch-alias-%EA%B5%90%EC%B2%B4-%EC%B5%9C%EC%A0%81%ED%99%94-%ED%95%98%EA%B8%B0/</loc>
+    <lastmod>2023-07-28T18:00:02+09:00</lastmod>
+  </url><url>
+    <loc>https://ritty27.github.io/post/</loc>
+    <lastmod>2023-07-28T18:00:02+09:00</lastmod>
   </url><url>
     <loc>https://ritty27.github.io/</loc>
+    <lastmod>2023-07-28T18:00:02+09:00</lastmod>
+  </url><url>
+    <loc>https://ritty27.github.io/archives/</loc>
+    <lastmod>2019-05-28T00:00:00+00:00</lastmod>
   </url><url>
     <loc>https://ritty27.github.io/tags/</loc>
   </url>
